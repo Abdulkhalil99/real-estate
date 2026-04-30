@@ -1,82 +1,93 @@
-import express, { Application, Request, Response, NextFunction } from 'express';
+import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 
-// Load environment variables from .env file
-dotenv.config();
+import { env } from './config/env';
+import { CONSTANTS } from './config/constants';
+import { logger } from './utils/logger';
+import routes from './routes/index';
+import { errorMiddleware } from './middleware/error.middleware';
+import { HttpError } from './utils/apiResponse';
+
+import path from 'path';
+import uploadRoutes from './routes/upload.routes';
 
 const app: Application = express();
-const PORT = process.env.PORT || 5000;
 
-// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-// helmet: adds security headers to every response
+// ─── SECURITY MIDDLEWARE ──────────────────────────────────────────────────────
 app.use(helmet());
 
-// cors: allows our frontend (on port 3000) to talk to this backend
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: env.FRONTEND_URL,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// morgan: logs every request to the console (very useful for debugging)
-app.use(morgan('dev'));
+const limiter = rateLimit({
+  windowMs: CONSTANTS.RATE_LIMIT_WINDOW_MS,
+  max: CONSTANTS.RATE_LIMIT_MAX_REQUESTS,
+  message: { success: false, error: 'Too many requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(CONSTANTS.API_PREFIX, limiter);
 
-// express.json: lets us read JSON from request bodies
+// ─── PARSING MIDDLEWARE ───────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// rateLimit: protects against too many requests from one IP
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,                  // max 100 requests per window
-  message: { error: 'Too many requests, please try again later.' },
-});
-app.use('/api', limiter);
+// ─── LOGGING MIDDLEWARE ───────────────────────────────────────────────────────
+// Skip logging in test environment so tests are clean
+if (!env.isTest) {
+  app.use(morgan('dev', {
+    stream: { write: (message) => logger.http(message.trim()) },
+  }));
+}
 
-// ─── ROUTES ───────────────────────────────────────────────────────────────────
-// Health check — lets Docker and CI know the server is alive
-app.get('/health', (req: Request, res: Response) => {
+// ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
+// This is at root level (not under /api/v1) so Docker/infra can hit it easily
+app.get('/health', (_req, res) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
+    environment: env.NODE_ENV,
+    version: '1.0.0',
   });
 });
 
-// Placeholder — we will add real routes in the next step
-app.get('/api', (req: Request, res: Response) => {
-  res.json({ message: 'Real Estate Platform API v1.0' });
-});
+// ─── API ROUTES ───────────────────────────────────────────────────────────────
+app.use(CONSTANTS.API_PREFIX, routes);
+
+// ADD after the existing app.use(CONSTANTS.API_PREFIX, routes) line:
+
+// Serve uploaded images as static files
+// This makes http://localhost:5000/uploads/properties/file.jpg work
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Register upload routes
+// Note: upload routes are separate because they use multer middleware
+app.use(`${CONSTANTS.API_PREFIX}/upload`, uploadRoutes);
 
 // ─── 404 HANDLER ─────────────────────────────────────────────────────────────
-app.use((req: Request, res: Response) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+app.use((req, res) => {
+  HttpError.notFound(res, `Route ${req.method} ${req.path}`);
 });
 
-// ─── ERROR HANDLER ───────────────────────────────────────────────────────────
-// This catches any unhandled errors from routes
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Unhandled error:', err.message);
-  res.status(500).json({
-    error: process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : err.message,
-  });
-});
+// ─── ERROR HANDLER ────────────────────────────────────────────────────────────
+// MUST be last — Express identifies error handlers by 4 parameters
+app.use(errorMiddleware);
 
-// ─── START ────────────────────────────────────────────────────────────────────
+// ─── START SERVER ─────────────────────────────────────────────────────────────
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`
-  ┌─────────────────────────────────────┐
-  │  Server running on port ${PORT}        │
-  │  Health: http://localhost:${PORT}/health │
-  │  API:    http://localhost:${PORT}/api    │
-  └─────────────────────────────────────┘
-    `);
+  app.listen(env.PORT, () => {
+    logger.info(`Server running in ${env.NODE_ENV} mode`);
+    logger.info(`Health:     http://localhost:${env.PORT}/health`);
+    logger.info(`API:        http://localhost:${env.PORT}${CONSTANTS.API_PREFIX}`);
+    logger.info(`Auth:       http://localhost:${env.PORT}${CONSTANTS.API_PREFIX}/auth`);
+    logger.info(`Properties: http://localhost:${env.PORT}${CONSTANTS.API_PREFIX}/properties`);
   });
 }
 
