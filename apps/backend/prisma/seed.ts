@@ -64,6 +64,71 @@ async function main() {
   console.log(`Created ${4} users`);
 
   // ── Create Properties ──────────────────────────────────────────────────────
+
+
+
+  // ── Generate 100 Afghanistan Properties ─────────────────────────────
+
+  const afghanCities = [
+    'Kabul',
+    'Herat',
+    'Mazar-i-Sharif',
+    'Kandahar',
+    'Jalalabad',
+    'Kunduz',
+  ];
+
+  const propertyTitles = [
+    'Modern Family House',
+    'Luxury Villa',
+    'Affordable Apartment',
+    'Spacious Condo',
+    'Commercial Space',
+  ];
+
+  const descriptions = [
+    'Beautiful property located in a prime area with all modern facilities.',
+    'Perfect for families, with spacious rooms and great lighting.',
+    'Located near schools, markets, and public transport.',
+    'Recently built with modern design and high-quality materials.',
+  ];
+
+  for (let i = 0; i < 100; i++) {
+    const city = afghanCities[i % afghanCities.length];
+
+    await prisma.property.create({
+      data: {
+        title: `${propertyTitles[i % propertyTitles.length]} in ${city}`,
+        description: descriptions[i % descriptions.length],
+        price: Math.floor(Math.random() * 500000) + 50000,
+        status: i % 2 === 0 ? PropertyStatus.FOR_SALE : PropertyStatus.FOR_RENT,
+        type: Object.values(PropertyType)[i % Object.values(PropertyType).length],
+        address: `Street ${i + 1}`,
+        city: city,
+        state: city,
+        zipCode: `10${i}`,
+        bedrooms: Math.floor(Math.random() * 5) + 1,
+        bathrooms: Math.floor(Math.random() * 3) + 1,
+        area: Math.floor(Math.random() * 300) + 80,
+        yearBuilt: 2000 + (i % 25),
+        featured: i % 10 === 0,
+        agentId: i % 2 === 0 ? agent1.id : agent2.id,
+        images: {
+          create: [
+            {
+              url: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800',
+              isPrimary: true,
+              order: 1,
+            },
+          ],
+        },
+      },
+    });
+  }
+
+  console.log('Created 100 Afghanistan properties');
+
+
   const property1 = await prisma.property.create({
     data: {
       title: 'Luxury Villa with Sea View',
