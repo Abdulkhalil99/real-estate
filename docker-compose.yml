@@ -1,111 +1,71 @@
-# docker-compose.yml
-# This file starts ALL services with one command: docker compose up
-
-version: '3.9'
-
-# ─── SERVICES ─────────────────────────────────────────────────────────────────
-# A "service" = one running container
 services:
 
-  # ── 1. PostgreSQL Database ───────────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine          # Use official PostgreSQL 16 (alpine = small)
-    container_name: real_estate_db
-    restart: unless-stopped            # Auto-restart if it crashes, but not if you stop it manually
-
+    image: postgres:16-alpine
+    container_name: real_estate_db_prod
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres          # Database username
-      POSTGRES_PASSWORD: password      # Database password (change in production!)
-      POSTGRES_DB: real_estate_db      # Database name — created automatically on first start
-
-    ports:
-      - "5432:5432"                    # host:container — lets you connect from your laptop
-
+      POSTGRES_USER:     ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB:       ${POSTGRES_DB:-real_estate_db}
     volumes:
-      - postgres_data:/var/lib/postgresql/data   # Persist data across restarts
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql  # Optional: run SQL on first start
-
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - real-estate-network
-
+      - app-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d real_estate_db"]
-      interval: 10s     # Check every 10 seconds
-      timeout: 5s       # Fail if no response in 5 seconds
-      retries: 5        # Try 5 times before marking as unhealthy
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-
-  # ── 2. Backend API ───────────────────────────────────────────────────────────
   backend:
-    build:
-      context: ./apps/backend          # Where to find the Dockerfile
-      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/real-estate-platform}/backend:latest
     container_name: real_estate_backend
     restart: unless-stopped
-
     environment:
-      NODE_ENV: development
-      PORT: 5000
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/real_estate_db
-      # Note: "postgres" above is the SERVICE NAME — Docker resolves it to the container IP automatically
-      JWT_SECRET: your_super_secret_jwt_key_change_in_production
-      JWT_EXPIRES_IN: 7d
-      FRONTEND_URL: http://localhost:3000
-
-    ports:
-      - "5000:5000"                    # Expose backend on your laptop's port 5000
-
-    volumes:
-      - ./apps/backend/src:/app/src    # Mount source code — changes reflect without rebuilding
-      - /app/node_modules              # Anonymous volume: keeps container's node_modules separate
-
+      NODE_ENV:              production
+      PORT:                  5000
+      DATABASE_URL:          postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-real_estate_db}?schema=public
+      JWT_SECRET:            ${JWT_SECRET}
+      JWT_EXPIRES_IN:        15m
+      JWT_REFRESH_SECRET:    ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: 30d
+      FRONTEND_URL:          ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       postgres:
-        condition: service_healthy     # Don't start backend until postgres is healthy
-
+        condition: service_healthy
     networks:
-      - real-estate-network
-
-    # Use nodemon in development so the server auto-restarts on file changes
-    command: npx nodemon --exec ts-node src/index.ts
-
-
-  # ── 3. pgAdmin — Visual Database Editor ─────────────────────────────────────
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: real_estate_pgadmin
-    restart: unless-stopped
-
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@realestate.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-
+      - app-network
     ports:
-      - "5050:80"                      # pgAdmin web UI at http://localhost:5050
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin  # Persist pgAdmin settings
-
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/real-estate-platform}/frontend:latest
+    container_name: real_estate_frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL:    ${NEXT_PUBLIC_API_URL:-http://localhost:5000/api/v1}
+      NEXT_PUBLIC_UPLOAD_URL: ${NEXT_PUBLIC_UPLOAD_URL:-http://localhost:5000}
     depends_on:
-      - postgres
-
+      - backend
     networks:
-      - real-estate-network
+      - app-network
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+networks:
+  app-network:
+    driver: bridge
 
-# ─── VOLUMES ──────────────────────────────────────────────────────────────────
-# Named volumes are managed by Docker — data lives outside any container.
-# Even if you delete a container, the volume keeps the data safe.
 volumes:
   postgres_data:
-    driver: local
-  pgadmin_data:
-    driver: local
-
-
-# ─── NETWORKS ─────────────────────────────────────────────────────────────────
-# A private network so containers can talk to each other by name.
-# "postgres" resolves to the postgres container's IP automatically.
-networks:
-  real-estate-network:
-    driver: bridge
