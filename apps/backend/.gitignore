@@ -1,3 +1,6 @@
 # Uploaded files — never commit real images
 uploads/*
 !uploads/**/.gitkeep
+# Log files
+apps/backend/logs/
+*.log

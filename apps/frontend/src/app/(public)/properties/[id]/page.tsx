@@ -5,7 +5,9 @@ import { propertyApi } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/Badge';
 import { formatPrice, formatArea, formatDate, getTypeLabel } from '@/lib/utils';
 import InquiryForm from '@/components/forms/InquiryForm';
+import FavoriteButton from '@/components/property/FavoriteButton';
 import ImageGallery from '@/components/property/ImageGallery';
+
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   try {

@@ -41,7 +41,7 @@ export default async function HomePage() {
             <Link href="/properties?featured=true" className="hidden md:flex items-center gap-2 text-blue-700 font-semibold text-sm">View all →</Link>
           </div>
           {featured.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {featured.map((p) => <PropertyCard key={p.id} property={p} />)}
             </div>
           ) : (
