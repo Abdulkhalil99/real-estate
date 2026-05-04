@@ -182,7 +182,7 @@ export default function PropertyForm({ property }: Props) {
                 <select
                   className="input appearance-none"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value)}>
+                  onChange={(e) => setStatus(e.target.value as typeof status)}>
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>{s.replace('_', ' ')}</option>
                   ))}
@@ -193,7 +193,7 @@ export default function PropertyForm({ property }: Props) {
                 <select
                   className="input appearance-none"
                   value={type}
-                  onChange={(e) => setType(e.target.value)}>
+                  onChange={(e) => setType(e.target.value as typeof type)}>
                   {TYPE_OPTIONS.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
