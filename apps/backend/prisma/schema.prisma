@@ -1,6 +1,6 @@
-// This tells Prisma how to connect to the database
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -8,14 +8,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── ENUMS ────────────────────────────────────────────────────────────────────
-// Enums = a field that can only be one of a fixed set of values
-// PostgreSQL stores these as strings but validates them for us
-
 enum UserRole {
-  ADMIN   // can do everything
-  AGENT   // can create/edit properties
-  USER    // can browse and send inquiries
+  ADMIN
+  AGENT
+  USER
 }
 
 enum PropertyStatus {
@@ -34,151 +30,93 @@ enum PropertyType {
 }
 
 enum InquiryStatus {
-  NEW        // just submitted
-  CONTACTED  // agent has responded
-  CLOSED     // inquiry resolved
+  NEW
+  CONTACTED
+  CLOSED
 }
-
-// ─── USER TABLE ───────────────────────────────────────────────────────────────
-// One user can:
-//   - list many properties (as an agent)
-//   - send many inquiries (as a buyer/renter)
 
 model User {
-  id        String   @id @default(cuid())  // cuid = collision-resistant unique id
-  email     String   @unique               // no two users can share an email
-  password  String                         // bcrypt hashed — never plain text
-  firstName String
-  lastName  String
-  role      UserRole @default(USER)        // new users start as USER
-  phone     String?                        // ? = optional field
-  avatar    String?                        // URL to profile picture
-
-  // Relationships
-  properties Property[]  // properties this user listed as agent
-  inquiries  Inquiry[]   // inquiries this user sent
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          UserRole       @default(USER)
+  phone         String?
+  avatar        String?
+  properties    Property[]
+  inquiries     Inquiry[]
   refreshTokens RefreshToken[]
-
-  // Timestamps — @updatedAt auto-updates on every save
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Indexes speed up common queries
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   @@index([email])
   @@index([role])
-
-  // What this table is called in the database
   @@map("users")
 }
-
-// ─── PROPERTY TABLE ───────────────────────────────────────────────────────────
-// One property:
-//   - belongs to one agent (User)
-//   - has many images (PropertyImage)
-//   - receives many inquiries (Inquiry)
 
 model Property {
   id          String         @id @default(cuid())
   title       String
-  description String         @db.Text   // Text = unlimited length (vs String = 191 chars)
+  description String         @db.Text
   price       Float
   status      PropertyStatus @default(FOR_SALE)
   type        PropertyType
-
-  // Location
-  address String
-  city    String
-  state   String
-  zipCode String
-  country String @default("Tunisia")
-
-  // Details
-  bedrooms  Int
-  bathrooms Float          // Float because 1.5 bathrooms is valid
-  area      Float          // square meters
-  yearBuilt Int?           // optional
-  featured  Boolean        @default(false)  // shown on homepage
-
-  // The agent who listed this property
-  // onDelete: CASCADE means if the agent is deleted, their properties are too
-  agentId String
-  agent   User   @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  // Relationships
-  images    PropertyImage[]
-  inquiries Inquiry[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Index the most common filter fields for fast queries
+  address     String
+  city        String
+  state       String
+  zipCode     String
+  country     String         @default("Tunisia")
+  bedrooms    Int
+  bathrooms   Float
+  area        Float
+  yearBuilt   Int?
+  featured    Boolean        @default(false)
+  agentId     String
+  agent       User           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  images      PropertyImage[]
+  inquiries   Inquiry[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   @@index([city])
   @@index([status])
   @@index([type])
   @@index([price])
   @@index([agentId])
   @@index([featured])
-
   @@map("properties")
 }
 
-// ─── PROPERTY IMAGE TABLE ─────────────────────────────────────────────────────
-// Separated from Property so one property can have unlimited images
-// without making the Property row huge
-
 model PropertyImage {
   id         String   @id @default(cuid())
-  url        String                          // URL to the image (cloud storage)
-  alt        String?                         // accessibility text
-  isPrimary  Boolean  @default(false)        // the main thumbnail image
-  order      Int      @default(0)            // display order
-
-  // Which property this image belongs to
-  // onDelete: Cascade = if property deleted, all its images are deleted too
+  url        String
+  alt        String?
+  isPrimary  Boolean  @default(false)
+  order      Int      @default(0)
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-
+  createdAt  DateTime @default(now())
   @@index([propertyId])
   @@map("property_images")
 }
 
-// ─── INQUIRY TABLE ────────────────────────────────────────────────────────────
-// When a visitor contacts an agent about a property
-// userId is optional because visitors can inquire without an account
-
 model Inquiry {
-  id      String        @id @default(cuid())
-  name    String                              // visitor's name
-  email   String                              // visitor's email
-  phone   String?                             // optional phone
-  message String        @db.Text
-  status  InquiryStatus @default(NEW)
-
-
-  
-
-  // Which property this inquiry is about
+  id         String        @id @default(cuid())
+  name       String
+  email      String
+  phone      String?
+  message    String        @db.Text
+  status     InquiryStatus @default(NEW)
   propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  // Which user sent this (optional — guests can inquire without account)
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
   @@index([propertyId])
   @@index([userId])
   @@index([status])
-
   @@map("inquiries")
 }
-
-// Add this to your existing schema.prisma file
-// after the Inquiry model
 
 model RefreshToken {
   id        String   @id @default(cuid())
@@ -187,7 +125,6 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
-
   @@index([token])
   @@index([userId])
   @@map("refresh_tokens")
