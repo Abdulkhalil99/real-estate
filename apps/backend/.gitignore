@@ -4,3 +4,4 @@ uploads/*
 # Log files
 apps/backend/logs/
 *.log
+.env
