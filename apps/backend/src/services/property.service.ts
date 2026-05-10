@@ -167,6 +167,14 @@ export const propertyService = {
     const skip  = (page - 1) * limit;
 
     const where: Prisma.PropertyWhereInput = { agentId };
+    if (query.q) {
+      where.OR = [
+        { title:       { contains: query.q, mode: 'insensitive' } },
+        { description: { contains: query.q, mode: 'insensitive' } },
+        { city:        { contains: query.q, mode: 'insensitive' } },
+        { address:     { contains: query.q, mode: 'insensitive' } },
+      ];
+    }
     if (query.status) where.status = query.status;
 
     const [total, items] = await Promise.all([

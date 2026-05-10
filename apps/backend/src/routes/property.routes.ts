@@ -16,7 +16,6 @@ const router = Router();
 router.get('/featured', propertyController.getFeatured);
 router.get('/stats',    propertyController.getStats);
 router.get('/',         propertyController.getAll);
-router.get('/:id',      propertyController.getOne);
 
 // ── Protected routes — must be logged in as AGENT or ADMIN ───────────────────
 router.get(
@@ -25,6 +24,8 @@ router.get(
   authorize('AGENT', 'ADMIN'),
   propertyController.getMy
 );
+
+router.get('/:id', propertyController.getOne);
 
 router.post(
   '/',

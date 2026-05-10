@@ -11,3 +11,6 @@ A full-stack real estate platform with admin dashboard, property listings, and i
 - **CI/CD:** GitHub Actions + Docker
 
 ## Project Structure
+the structure will add later 
+we will complete later 
+for now it doesn't have full structure 
